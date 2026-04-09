@@ -245,6 +245,23 @@ function imageToCanvasNoDpr(ix, iy) {
 
 // --- Magnifier ---
 
+// Sample pixel at (x, y) on the canvas and return its inverted color
+function getCrosshairColor(ctx, x, y) {
+  try {
+    const pixel = ctx.getImageData(
+      x * (window.devicePixelRatio || 1),
+      y * (window.devicePixelRatio || 1),
+      1, 1
+    ).data;
+    const r = 255 - pixel[0];
+    const g = 255 - pixel[1];
+    const b = 255 - pixel[2];
+    return `rgb(${r},${g},${b})`;
+  } catch {
+    return '#ffffff';
+  }
+}
+
 function drawMagnifier(ctx, img, imagePos) {
   const rect = container.getBoundingClientRect();
   // Position magnifier above the cursor
@@ -259,7 +276,6 @@ function drawMagnifier(ctx, img, imagePos) {
   // Clamp horizontally
   mx = Math.max(0, Math.min(rect.width - MAGNIFIER_SIZE, mx));
 
-  const crossColor = mousePressed ? '#ffee00' : '#ffffff';
   const borderColor = mousePressed ? '#ffee00' : '#6c9bff';
 
   // The magnifier shows a zoomed-in portion of the image centered on imagePos
@@ -287,6 +303,9 @@ function drawMagnifier(ctx, img, imagePos) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(img.bitmap, sx, sy, sw, sh, mx, my, MAGNIFIER_SIZE, MAGNIFIER_SIZE);
   }
+
+  // Sample center pixel and compute inverse color for crosshair
+  const crossColor = mousePressed ? '#ffee00' : getCrosshairColor(ctx, mx + half, my + half);
 
   // Draw crosshair in the center of the magnifier
   const cx = mx + half;
