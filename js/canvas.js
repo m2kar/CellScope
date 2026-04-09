@@ -400,79 +400,97 @@ function drawLineLabel(ctx, a, b, text, color) {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   let angle = Math.atan2(dy, dx);
-
-  // Keep text readable: flip if it would be upside-down
+  // Keep text readable: flip if upside-down
   if (angle > Math.PI / 2) angle -= Math.PI;
   if (angle < -Math.PI / 2) angle += Math.PI;
 
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2;
+  const lineLen = Math.sqrt(dx * dx + dy * dy);
+  if (lineLen < 20) { ctx.restore(); return; }
 
-  // Perpendicular unit vector (pointing "above" the line)
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 20) { ctx.restore(); return; } // too short to label
-  // Normal pointing upward relative to the line direction
-  let nx = -dy / len;
-  let ny = dx / len;
-  // Ensure the normal points roughly "up" on screen (negative y)
-  // For the adjusted angle, the "above" direction should move text away from line
+  // Tangent unit vector (along the line, in the direction of the readable angle)
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  // Perpendicular: "above" = left-hand normal of tangent
+  let nx = -sin;
+  let ny = cos;
+  // Ensure "above" points roughly up on screen (ny < 0)
   if (ny > 0) { nx = -nx; ny = -ny; }
 
   const textWidth = ctx.measureText(text).width;
   const textHeight = fontSize;
-  const padding = 2;
+  const padding = 3;
+  const perpOffset = 6; // distance from line
 
-  // Try increasing offsets to avoid overlap
-  const baseOffset = 6;
+  // Center of line
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+
+  // Tangential shift: 25% of line length toward each end
+  const tangentShift = lineLen * 0.25;
+
+  // Generate candidate positions:
+  // [tangent side] x [perpendicular side]
+  // tangent: left (-shift), center (0), right (+shift)
+  // perp: above (+perpOffset), below (-perpOffset)
+  const tangentOffsets = [-tangentShift, 0, tangentShift];
+  const perpSides = [perpOffset, -perpOffset]; // above first, then below
+
   let placed = false;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const offset = baseOffset + attempt * (textHeight + 2);
-    const cx = mx + nx * offset;
-    const cy = my + ny * offset;
+  for (const perpSide of perpSides) {
+    for (const tOff of tangentOffsets) {
+      const cx = mx + cos * tOff + nx * perpSide;
+      const cy = my + sin * tOff + ny * perpSide;
+      const box = computeLabelBox(cx, cy, angle, textWidth, textHeight, padding);
 
-    // Compute axis-aligned bounding box of the rotated label
-    const hw = textWidth / 2 + padding;
-    const hh = textHeight / 2 + padding;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    // Four corners of the rotated rect
-    const corners = [
-      { x: cx + (-hw) * cos - (-hh) * sin, y: cy + (-hw) * sin + (-hh) * cos },
-      { x: cx + (hw) * cos - (-hh) * sin, y: cy + (hw) * sin + (-hh) * cos },
-      { x: cx + (hw) * cos - (hh) * sin, y: cy + (hw) * sin + (hh) * cos },
-      { x: cx + (-hw) * cos - (hh) * sin, y: cy + (-hw) * sin + (hh) * cos },
-    ];
-    const minX = Math.min(...corners.map(c => c.x));
-    const maxX = Math.max(...corners.map(c => c.x));
-    const minY = Math.min(...corners.map(c => c.y));
-    const maxY = Math.max(...corners.map(c => c.y));
-    const box = { minX, minY, maxX, maxY };
-
-    if (!labelBoxes.some(b => boxesOverlap(b, box))) {
-      labelBoxes.push(box);
-      ctx.translate(cx, cy);
-      ctx.rotate(angle);
-      ctx.fillStyle = color;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(text, 0, 0);
-      placed = true;
-      break;
+      if (!labelBoxes.some(b => boxesOverlap(b, box))) {
+        labelBoxes.push(box);
+        drawLabelAt(ctx, cx, cy, angle, text, color);
+        placed = true;
+        break;
+      }
     }
+    if (placed) break;
   }
 
-  // Fallback: draw at base offset anyway
+  // Fallback: draw at left-above anyway
   if (!placed) {
-    const cx = mx + nx * baseOffset;
-    const cy = my + ny * baseOffset;
-    ctx.translate(cx, cy);
-    ctx.rotate(angle);
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, 0, 0);
+    const cx = mx + cos * (-tangentShift) + nx * perpOffset;
+    const cy = my + sin * (-tangentShift) + ny * perpOffset;
+    const box = computeLabelBox(cx, cy, angle, textWidth, textHeight, padding);
+    labelBoxes.push(box);
+    drawLabelAt(ctx, cx, cy, angle, text, color);
   }
 
+  ctx.restore();
+}
+
+function computeLabelBox(cx, cy, angle, textWidth, textHeight, padding) {
+  const hw = textWidth / 2 + padding;
+  const hh = textHeight / 2 + padding;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const corners = [
+    { x: cx + (-hw) * cos - (-hh) * sin, y: cy + (-hw) * sin + (-hh) * cos },
+    { x: cx + (hw) * cos - (-hh) * sin,  y: cy + (hw) * sin + (-hh) * cos },
+    { x: cx + (hw) * cos - (hh) * sin,   y: cy + (hw) * sin + (hh) * cos },
+    { x: cx + (-hw) * cos - (hh) * sin,  y: cy + (-hw) * sin + (hh) * cos },
+  ];
+  return {
+    minX: Math.min(corners[0].x, corners[1].x, corners[2].x, corners[3].x),
+    maxX: Math.max(corners[0].x, corners[1].x, corners[2].x, corners[3].x),
+    minY: Math.min(corners[0].y, corners[1].y, corners[2].y, corners[3].y),
+    maxY: Math.max(corners[0].y, corners[1].y, corners[2].y, corners[3].y),
+  };
+}
+
+function drawLabelAt(ctx, cx, cy, angle, text, color) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 0, 0);
   ctx.restore();
 }
 
