@@ -245,7 +245,10 @@ function onMouseMove(e) {
   if (isDraggingEndpoint && dragHit) {
     const pos = screenToImage(e.clientX, e.clientY);
     dragHit.point.x = pos.x;
-    dragHit.point.y = pos.y;
+    // Calibration endpoints stay horizontal: lock Y
+    if (dragHit.source !== 'calibration') {
+      dragHit.point.y = pos.y;
+    }
     renderOverlay(pos, getScreenRelativePos(e));
     return;
   }

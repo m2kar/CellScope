@@ -175,7 +175,12 @@ function executeAction(action) {
       // action: { imageIndex, source, particleId?, lineKey?, pointKey, from, to }
       const target = resolveEndpoint(img, action);
       if (!target) return null;
-      target[action.pointKey] = action.to;
+      // Calibration line must stay horizontal: only allow X changes
+      if (action.source === 'calibration') {
+        target[action.pointKey] = { x: action.to.x, y: action.from.y };
+      } else {
+        target[action.pointKey] = action.to;
+      }
       recalcAll(img);
       return { type: 'MOVE_ENDPOINT', imageIndex: action.imageIndex, source: action.source,
                particleId: action.particleId, lineKey: action.lineKey, pointKey: action.pointKey,
