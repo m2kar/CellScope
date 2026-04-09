@@ -97,7 +97,10 @@
   <!-- Status bar -->
   <div id="statusbar">
     <span id="status-message">就绪 - 请加载图片开始工作</span>
-    <span id="status-zoom">缩放: 100%</span>
+    <div id="zoom-control">
+      <input type="range" id="zoom-slider" min="5" max="2000" value="100" class="zoom-slider">
+      <span id="status-zoom" title="双击输入缩放比例">缩放: 100%</span>
+    </div>
   </div>
 
   <!-- Annotation table -->

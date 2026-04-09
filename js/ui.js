@@ -10,7 +10,65 @@ export function setStatus(msg) {
 
 export function updateZoomDisplay() {
   const { zoom } = getState().viewport;
-  document.getElementById('status-zoom').textContent = `缩放: ${Math.round(zoom * 100)}%`;
+  const pct = Math.round(zoom * 100);
+  const zoomEl = document.getElementById('status-zoom');
+  // Only update text if not currently editing
+  if (!zoomEl.querySelector('#zoom-input')) {
+    zoomEl.textContent = `缩放: ${pct}%`;
+  }
+  // Update slider position (logarithmic scale)
+  const slider = document.getElementById('zoom-slider');
+  slider.value = zoomToSlider(zoom);
+}
+
+// Logarithmic mapping: slider value <-> zoom
+// slider 5..2000 maps to zoom 0.05..20 via log scale
+function sliderToZoom(val) {
+  // val 5..2000 -> log space -> zoom 0.05..20
+  const minLog = Math.log(0.05);
+  const maxLog = Math.log(20);
+  const t = (val - 5) / (2000 - 5);
+  return Math.exp(minLog + t * (maxLog - minLog));
+}
+
+function zoomToSlider(zoom) {
+  const minLog = Math.log(0.05);
+  const maxLog = Math.log(20);
+  const t = (Math.log(zoom) - minLog) / (maxLog - minLog);
+  return Math.round(5 + t * (2000 - 5));
+}
+
+export function initZoomControls() {
+  const slider = document.getElementById('zoom-slider');
+  const zoomEl = document.getElementById('status-zoom');
+
+  slider.addEventListener('input', () => {
+    const newZoom = sliderToZoom(Number(slider.value));
+    setZoomTo(newZoom);
+  });
+
+  zoomEl.addEventListener('dblclick', () => {
+    const { zoom } = getState().viewport;
+    const pct = Math.round(zoom * 100);
+    zoomEl.innerHTML = `缩放: <input id="zoom-input" type="number" min="5" max="2000" value="${pct}">%`;
+    const input = document.getElementById('zoom-input');
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const val = parseInt(input.value);
+      if (val && val >= 5 && val <= 2000) {
+        setZoomTo(val / 100);
+      }
+      zoomEl.textContent = `缩放: ${Math.round(getState().viewport.zoom * 100)}%`;
+    };
+
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { zoomEl.textContent = `缩放: ${Math.round(getState().viewport.zoom * 100)}%`; }
+    });
+  });
 }
 
 // --- Image list sidebar ---
@@ -185,8 +243,10 @@ export function initKeyboardShortcuts() {
 // These will be set by app.js
 let zoomBy = () => {};
 let resetZoom = () => {};
+let setZoomTo = () => {};
 
-export function setZoomCallbacks(zoomByFn, resetZoomFn) {
+export function setZoomCallbacks(zoomByFn, resetZoomFn, setZoomToFn) {
   zoomBy = zoomByFn;
   resetZoom = resetZoomFn;
+  setZoomTo = setZoomToFn;
 }

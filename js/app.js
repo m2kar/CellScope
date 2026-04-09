@@ -9,7 +9,7 @@ import { initStatistics, updateStatistics } from './statistics.js';
 import { exportCSV } from './csv-export.js';
 import { exportImage } from './export-image.js';
 import { scheduleSave, loadFromStorage, restoreAnnotations } from './storage.js';
-import { setStatus, updateZoomDisplay, updateImageList, updateAnnotationTable, updateModeButtons, updateUndoRedoButtons, initTableToggle, initKeyboardShortcuts, setZoomCallbacks } from './ui.js';
+import { setStatus, updateZoomDisplay, updateImageList, updateAnnotationTable, updateModeButtons, updateUndoRedoButtons, initTableToggle, initKeyboardShortcuts, setZoomCallbacks, initZoomControls } from './ui.js';
 
 // --- Init ---
 
@@ -19,7 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initStatistics();
   initTableToggle();
   initKeyboardShortcuts();
-  setZoomCallbacks(zoomBy, resetZoom);
+  setZoomCallbacks(zoomBy, resetZoom, setZoomTo);
+  initZoomControls();
   bindToolbar();
   bindCanvasEvents();
   bindDragDrop();
@@ -401,6 +402,17 @@ function zoomBy(factor) {
 function resetZoom() {
   const vp = fitImageInView();
   if (vp) setViewport(vp);
+}
+
+function setZoomTo(newZoom) {
+  const state = getState();
+  newZoom = Math.max(0.05, Math.min(20, newZoom));
+  const canvasSize = getCanvasSize();
+  const cx = canvasSize.width / 2;
+  const cy = canvasSize.height / 2;
+  const panX = cx - (cx - state.viewport.panX) * (newZoom / state.viewport.zoom);
+  const panY = cy - (cy - state.viewport.panY) * (newZoom / state.viewport.zoom);
+  setViewport({ zoom: newZoom, panX, panY });
 }
 
 // --- Filter sliders ---

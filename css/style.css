@@ -329,9 +329,35 @@ body {
   flex: 1;
 }
 
-#status-zoom {
+#zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-left: 16px;
   white-space: nowrap;
+}
+
+.zoom-slider {
+  width: 100px;
+  accent-color: var(--accent);
+}
+
+#status-zoom {
+  cursor: default;
+  min-width: 72px;
+  text-align: right;
+}
+
+#zoom-input {
+  width: 60px;
+  padding: 1px 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: right;
+  outline: none;
 }
 
 /* Annotation table */
