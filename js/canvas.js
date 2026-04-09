@@ -276,9 +276,14 @@ function drawMagnifier(ctx, img, imagePos) {
 
   const borderColor = mousePressed ? '#ffee00' : '#6c9bff';
 
-  // The magnifier shows a zoomed-in portion of the image centered on imagePos
-  // We sample from the image bitmap directly
-  const sampleRadius = MAGNIFIER_SIZE / (2 * MAGNIFIER_ZOOM); // in image pixels
+  // Magnifier zoom is relative to the current view zoom, capped at pixel level
+  const { zoom } = getState().viewport;
+  // Effective zoom in magnifier = current view zoom * MAGNIFIER_ZOOM
+  // But cap so we don't go beyond 1 screen pixel = 1 image pixel (i.e. effectiveZoom <= maxZoom)
+  // At pixel level: MAGNIFIER_SIZE screen px shows MAGNIFIER_SIZE image px → effectiveZoom = 1 image px per screen px
+  // sampleRadius in image pixels = MAGNIFIER_SIZE / (2 * effectiveZoom)
+  const effectiveZoom = Math.min(zoom * MAGNIFIER_ZOOM, MAGNIFIER_SIZE / 2); // cap at ~pixel level
+  const sampleRadius = MAGNIFIER_SIZE / (2 * effectiveZoom); // in image pixels
 
   ctx.save();
 
@@ -349,7 +354,7 @@ function drawMagnifier(ctx, img, imagePos) {
   ctx.fillStyle = '#ccc';
   ctx.font = '11px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText(`(${Math.round(imagePos.x)}, ${Math.round(imagePos.y)})`, mx + half, my + MAGNIFIER_SIZE - 5);
+  ctx.fillText(`(${Math.round(imagePos.x)}, ${Math.round(imagePos.y)}) ${effectiveZoom.toFixed(1)}x`, mx + half, my + MAGNIFIER_SIZE - 5);
 
   ctx.restore();
 }
