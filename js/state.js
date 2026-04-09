@@ -61,6 +61,23 @@ export function setActiveImage(index) {
   notify('activeImage');
 }
 
+export function removeImage(index) {
+  if (index < 0 || index >= state.images.length) return;
+  state.images.splice(index, 1);
+  if (state.images.length === 0) {
+    state.activeImageIndex = -1;
+  } else if (state.activeImageIndex >= state.images.length) {
+    state.activeImageIndex = state.images.length - 1;
+  } else if (state.activeImageIndex > index) {
+    state.activeImageIndex--;
+  }
+  state.pendingPoint = null;
+  state.undoStack = [];
+  state.redoStack = [];
+  notify('activeImage');
+  notify('images');
+}
+
 // --- Mode ---
 
 export function setMode(mode) {

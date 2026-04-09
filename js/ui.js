@@ -1,6 +1,6 @@
 // ui.js — DOM updates: sidebar, annotation table, status bar, keyboard shortcuts
 
-import { getState, getActiveImage, setActiveImage, setMode, undo, redo, canUndo, canRedo, dispatch, clearPending } from './state.js';
+import { getState, getActiveImage, setActiveImage, removeImage, setMode, undo, redo, canUndo, canRedo, dispatch, clearPending } from './state.js';
 
 // --- Status bar ---
 
@@ -24,11 +24,16 @@ export function updateImageList() {
     const div = document.createElement('div');
     div.className = 'image-item' + (index === state.activeImageIndex ? ' active' : '');
     div.innerHTML = `
+      <button class="image-close" title="关闭图片">&times;</button>
       ${img.thumbnail ? `<img class="image-thumb" src="${img.thumbnail}" alt="">` : ''}
       <span class="image-name">${img.fileName}</span>
       <span class="image-info">${img.width}x${img.height} | ${img.particles.length} 粒子${img.calibration ? ' | 已标定' : ''}</span>
     `;
     div.addEventListener('click', () => setActiveImage(index));
+    div.querySelector('.image-close').addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeImage(index);
+    });
     list.appendChild(div);
   });
 
