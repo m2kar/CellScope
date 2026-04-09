@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CellScope - Particle Size Measurement Tool</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <div class="toolbar-group">
+      <label id="btn-load" class="toolbar-btn" title="加载图片">
+        <input type="file" id="file-input" multiple accept=".tif,.tiff,.png,.jpg,.jpeg,.bmp" hidden>
+        📂 加载图片
+      </label>
+      <div class="toolbar-separator"></div>
+      <button id="btn-navigate" class="toolbar-btn active" title="导航模式 (V)">🖱 导航</button>
+      <button id="btn-calibrate" class="toolbar-btn" title="标定模式 (C)">📏 标定</button>
+      <button id="btn-measure" class="toolbar-btn" title="测量模式 (M)">✏️ 测量</button>
+      <div class="toolbar-separator"></div>
+      <button id="btn-undo" class="toolbar-btn" title="撤销 (Ctrl+Z)" disabled>↩ 撤销</button>
+      <button id="btn-redo" class="toolbar-btn" title="重做 (Ctrl+Shift+Z)" disabled>↪ 重做</button>
+      <div class="toolbar-separator"></div>
+      <button id="btn-export-csv" class="toolbar-btn" title="导出CSV">📊 导出CSV</button>
+      <button id="btn-export-image" class="toolbar-btn" title="导出标注图片">🖼 导出图片</button>
+    </div>
+    <div class="toolbar-group">
+      <label class="toolbar-label">亮度</label>
+      <input type="range" id="slider-brightness" min="50" max="200" value="100" class="toolbar-slider">
+      <label class="toolbar-label">对比度</label>
+      <input type="range" id="slider-contrast" min="50" max="200" value="100" class="toolbar-slider">
+      <button id="btn-reset-filters" class="toolbar-btn-small" title="重置">重置</button>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div id="main">
+    <!-- Left sidebar: image list -->
+    <div id="sidebar-left">
+      <div class="sidebar-header">图片列表</div>
+      <div id="image-list"></div>
+    </div>
+
+    <!-- Center: canvas area -->
+    <div id="canvas-container">
+      <canvas id="canvas-image"></canvas>
+      <canvas id="canvas-overlay"></canvas>
+      <div id="empty-hint">
+        <p>📂 点击「加载图片」或拖拽图片文件到此处</p>
+        <p class="hint-sub">支持 TIF/TIFF/PNG/JPG 格式</p>
+      </div>
+    </div>
+
+    <!-- Right sidebar: stats -->
+    <div id="sidebar-right">
+      <div class="sidebar-header">统计信息</div>
+      <div id="stats-panel">
+        <div class="stat-row">
+          <span class="stat-label">粒子数量</span>
+          <span id="stat-count" class="stat-value">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">长径均值</span>
+          <span id="stat-major-mean" class="stat-value">-</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">长径标准差</span>
+          <span id="stat-major-std" class="stat-value">-</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">短径均值</span>
+          <span id="stat-minor-mean" class="stat-value">-</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">短径标准差</span>
+          <span id="stat-minor-std" class="stat-value">-</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">等效直径均值</span>
+          <span id="stat-eq-mean" class="stat-value">-</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">等效直径标准差</span>
+          <span id="stat-eq-std" class="stat-value">-</span>
+        </div>
+      </div>
+      <div class="sidebar-header" style="margin-top:12px;">长径 vs 短径</div>
+      <div id="histogram-container">
+        <canvas id="histogram-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div id="statusbar">
+    <span id="status-message">就绪 - 请加载图片开始工作</span>
+    <span id="status-zoom">缩放: 100%</span>
+  </div>
+
+  <!-- Annotation table -->
+  <div id="table-panel">
+    <div class="table-header" id="table-toggle">
+      <span>标注结果</span>
+      <span id="table-toggle-icon">▼</span>
+    </div>
+    <div id="table-container">
+      <table id="annotation-table">
+        <thead>
+          <tr>
+            <th>图片</th>
+            <th>粒子ID</th>
+            <th>长径</th>
+            <th>短径</th>
+            <th>长短径比</th>
+            <th>等效直径</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="annotation-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Calibration dialog -->
+  <div id="calibration-dialog" class="modal" hidden>
+    <div class="modal-content">
+      <h3>比例尺标定</h3>
+      <p id="calibration-pixel-info"></p>
+      <div class="modal-row">
+        <label>实际长度:</label>
+        <input type="number" id="calibration-length" min="0.01" step="any" placeholder="例如: 100">
+        <select id="calibration-unit">
+          <option value="nm">nm</option>
+          <option value="μm">μm</option>
+        </select>
+      </div>
+      <div class="modal-buttons">
+        <button id="calibration-ok" class="btn-primary">确定</button>
+        <button id="calibration-cancel" class="btn-secondary">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

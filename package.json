@@ -1,0 +1,13 @@
+{
+  "name": "cellscope",
+  "version": "1.0.0",
+  "description": "Browser-based particle size measurement tool for TEM microscope images",
+  "main": "index.html",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["particle", "measurement", "TEM", "microscope"],
+  "author": "m2kar",
+  "license": "MIT",
+  "type": "commonjs"
+}
