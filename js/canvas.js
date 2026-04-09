@@ -181,10 +181,10 @@ export function renderOverlay(currentMousePos, currentScreenPos) {
   // Helper to format a length value
   const fmtLen = (len, unit) => `${len.toFixed(1)} ${unit}`;
 
-  // Draw calibration line
+  // Draw calibration line (solid)
   if (img.calibration) {
     const calLabel = `${img.calibration.length} ${img.calibration.unit}`;
-    drawLine(img.calibration.p1, img.calibration.p2, '#6bffb8', lineWidth, overlayCtx, calLabel);
+    drawLine(img.calibration.p1, img.calibration.p2, '#6bffb8', lineWidth, overlayCtx, calLabel, { solid: true });
   }
 
   // Draw completed particles
@@ -205,11 +205,9 @@ export function renderOverlay(currentMousePos, currentScreenPos) {
   const effectiveMousePos = getEffectiveMousePos(state);
 
   // Draw pending point and rubber-band line
+  const isCalibrateMode = state.mode === 'calibrate';
   if (state.pendingPoint && effectiveMousePos) {
-    drawLine(state.pendingPoint, effectiveMousePos, getPendingColor(state), lineWidth, overlayCtx);
-    drawDot(state.pendingPoint, getPendingColor(state), overlayCtx);
-  } else if (state.pendingPoint) {
-    drawDot(state.pendingPoint, getPendingColor(state), overlayCtx);
+    drawLine(state.pendingPoint, effectiveMousePos, getPendingColor(state), lineWidth, overlayCtx, null, isCalibrateMode ? { solid: true } : null);
   }
 
   // Draw magnifier in calibrate/measure mode
@@ -377,35 +375,35 @@ function resetLabelBoxes() {
   labelBoxes = [];
 }
 
-function drawLine(p1, p2, color, lineWidth, ctx, label) {
+function drawLine(p1, p2, color, lineWidth, ctx, label, opts) {
+  const solid = opts && opts.solid;
   const a = imageToCanvasNoDpr(p1.x, p1.y);
   const b = imageToCanvasNoDpr(p2.x, p2.y);
   ctx.beginPath();
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
-  ctx.setLineDash([5, 3]);
+  if (!solid) ctx.setLineDash([5, 3]);
   ctx.moveTo(a.x, a.y);
   ctx.lineTo(b.x, b.y);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Draw endpoints — fixed 3px screen radius; highlight if hovered
+  // Only show endpoint highlight when hovered (for drag interaction)
   const pts = [{ screen: a, image: p1 }, { screen: b, image: p2 }];
   for (const { screen, image } of pts) {
     const isHovered = hoveredHit && hoveredHit.point === image;
-    const r = isHovered ? 6 : 3;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
     if (isHovered) {
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }
   }
 
-  // Draw label parallel to the line, above it
+  // Draw label parallel to the line
   if (label) {
     drawLineLabel(ctx, a, b, label, color);
   }
@@ -515,17 +513,6 @@ function drawLabelAt(ctx, cx, cy, angle, text, color) {
 
 function boxesOverlap(a, b) {
   return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
-}
-
-function drawDot(p, color, ctx) {
-  const cp = imageToCanvasNoDpr(p.x, p.y);
-  ctx.beginPath();
-  ctx.arc(cp.x, cp.y, 4, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 1;
-  ctx.stroke();
 }
 
 function midpoint(p1, p2) {
