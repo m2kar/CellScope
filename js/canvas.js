@@ -176,33 +176,29 @@ export function renderOverlay(currentMousePos, currentScreenPos) {
 
   // Fixed screen-pixel line width — stays thin regardless of zoom
   const lineWidth = 1.5;
+  resetLabelBoxes();
+
+  // Helper to format a length value
+  const fmtLen = (len, unit) => `${len.toFixed(1)} ${unit}`;
 
   // Draw calibration line
   if (img.calibration) {
-    drawLine(img.calibration.p1, img.calibration.p2, '#6bffb8', lineWidth, overlayCtx);
-    const mid = midpoint(img.calibration.p1, img.calibration.p2);
-    const cp = imageToCanvasNoDpr(mid.x, mid.y);
-    overlayCtx.font = `${Math.max(11, 13)}px sans-serif`;
-    overlayCtx.fillStyle = '#6bffb8';
-    overlayCtx.textAlign = 'center';
-    overlayCtx.fillText(`${img.calibration.length} ${img.calibration.unit}`, cp.x, cp.y - 8);
+    const calLabel = `${img.calibration.length} ${img.calibration.unit}`;
+    drawLine(img.calibration.p1, img.calibration.p2, '#6bffb8', lineWidth, overlayCtx, calLabel);
   }
 
   // Draw completed particles
   for (const p of img.particles) {
-    drawLine(p.major.p1, p.major.p2, '#ff6b6b', lineWidth, overlayCtx);
-    drawLine(p.minor.p1, p.minor.p2, '#6bc5ff', lineWidth, overlayCtx);
-    const center = midpoint(p.major.p1, p.major.p2);
-    const cp = imageToCanvasNoDpr(center.x, center.y);
-    overlayCtx.font = `bold ${Math.max(11, 14)}px sans-serif`;
-    overlayCtx.fillStyle = '#fff';
-    overlayCtx.textAlign = 'center';
-    overlayCtx.fillText(`#${p.id}`, cp.x, cp.y - 10);
+    const majorLabel = `#${p.id} ${fmtLen(p.majorLength, p.unit)}`;
+    const minorLabel = fmtLen(p.minorLength, p.unit);
+    drawLine(p.major.p1, p.major.p2, '#ff6b6b', lineWidth, overlayCtx, majorLabel);
+    drawLine(p.minor.p1, p.minor.p2, '#6bc5ff', lineWidth, overlayCtx, minorLabel);
   }
 
   // Draw unpaired pending line (waiting for its pair)
   if (img.pendingLine) {
-    drawLine(img.pendingLine.p1, img.pendingLine.p2, '#ffb86b', lineWidth, overlayCtx);
+    const pendingLabel = fmtLen(img.pendingLine.length, img.pendingLine.unit);
+    drawLine(img.pendingLine.p1, img.pendingLine.p2, '#ffb86b', lineWidth, overlayCtx, pendingLabel);
   }
 
   // Effective mouse position for rubber-band (calibration locks Y)
@@ -355,7 +351,14 @@ function roundRect(ctx, x, y, w, h, r) {
 
 // --- Drawing helpers ---
 
-function drawLine(p1, p2, color, lineWidth, ctx) {
+// Track placed label bounding boxes per frame to avoid overlap
+let labelBoxes = [];
+
+function resetLabelBoxes() {
+  labelBoxes = [];
+}
+
+function drawLine(p1, p2, color, lineWidth, ctx, label) {
   const a = imageToCanvasNoDpr(p1.x, p1.y);
   const b = imageToCanvasNoDpr(p2.x, p2.y);
   ctx.beginPath();
@@ -382,6 +385,99 @@ function drawLine(p1, p2, color, lineWidth, ctx) {
       ctx.stroke();
     }
   }
+
+  // Draw label parallel to the line, above it
+  if (label) {
+    drawLineLabel(ctx, a, b, label, color);
+  }
+}
+
+function drawLineLabel(ctx, a, b, text, color) {
+  const fontSize = 11;
+  ctx.save();
+  ctx.font = `${fontSize}px sans-serif`;
+
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  let angle = Math.atan2(dy, dx);
+
+  // Keep text readable: flip if it would be upside-down
+  if (angle > Math.PI / 2) angle -= Math.PI;
+  if (angle < -Math.PI / 2) angle += Math.PI;
+
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+
+  // Perpendicular unit vector (pointing "above" the line)
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 20) { ctx.restore(); return; } // too short to label
+  // Normal pointing upward relative to the line direction
+  let nx = -dy / len;
+  let ny = dx / len;
+  // Ensure the normal points roughly "up" on screen (negative y)
+  // For the adjusted angle, the "above" direction should move text away from line
+  if (ny > 0) { nx = -nx; ny = -ny; }
+
+  const textWidth = ctx.measureText(text).width;
+  const textHeight = fontSize;
+  const padding = 2;
+
+  // Try increasing offsets to avoid overlap
+  const baseOffset = 6;
+  let placed = false;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const offset = baseOffset + attempt * (textHeight + 2);
+    const cx = mx + nx * offset;
+    const cy = my + ny * offset;
+
+    // Compute axis-aligned bounding box of the rotated label
+    const hw = textWidth / 2 + padding;
+    const hh = textHeight / 2 + padding;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    // Four corners of the rotated rect
+    const corners = [
+      { x: cx + (-hw) * cos - (-hh) * sin, y: cy + (-hw) * sin + (-hh) * cos },
+      { x: cx + (hw) * cos - (-hh) * sin, y: cy + (hw) * sin + (-hh) * cos },
+      { x: cx + (hw) * cos - (hh) * sin, y: cy + (hw) * sin + (hh) * cos },
+      { x: cx + (-hw) * cos - (hh) * sin, y: cy + (-hw) * sin + (hh) * cos },
+    ];
+    const minX = Math.min(...corners.map(c => c.x));
+    const maxX = Math.max(...corners.map(c => c.x));
+    const minY = Math.min(...corners.map(c => c.y));
+    const maxY = Math.max(...corners.map(c => c.y));
+    const box = { minX, minY, maxX, maxY };
+
+    if (!labelBoxes.some(b => boxesOverlap(b, box))) {
+      labelBoxes.push(box);
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 0, 0);
+      placed = true;
+      break;
+    }
+  }
+
+  // Fallback: draw at base offset anyway
+  if (!placed) {
+    const cx = mx + nx * baseOffset;
+    const cy = my + ny * baseOffset;
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 0, 0);
+  }
+
+  ctx.restore();
+}
+
+function boxesOverlap(a, b) {
+  return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
 }
 
 function drawDot(p, color, ctx) {
@@ -506,30 +602,24 @@ export function renderToExportCanvas() {
 
   const lineWidth = Math.max(2, img.width / 800);
   const fontSize = Math.max(14, img.width / 120);
+  const fmtLen = (len, unit) => `${len.toFixed(1)} ${unit}`;
 
   if (img.calibration) {
-    drawExportLine(ctx, img.calibration.p1, img.calibration.p2, '#6bffb8', lineWidth);
-    const mid = midpoint(img.calibration.p1, img.calibration.p2);
-    ctx.font = `${fontSize}px sans-serif`;
-    ctx.fillStyle = '#6bffb8';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${img.calibration.length} ${img.calibration.unit}`, mid.x, mid.y - lineWidth * 4);
+    const label = `${img.calibration.length} ${img.calibration.unit}`;
+    drawExportLine(ctx, img.calibration.p1, img.calibration.p2, '#6bffb8', lineWidth, fontSize, label);
   }
 
   for (const p of img.particles) {
-    drawExportLine(ctx, p.major.p1, p.major.p2, '#ff6b6b', lineWidth);
-    drawExportLine(ctx, p.minor.p1, p.minor.p2, '#6bc5ff', lineWidth);
-    const center = midpoint(p.major.p1, p.major.p2);
-    ctx.font = `bold ${fontSize}px sans-serif`;
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.fillText(`#${p.id}`, center.x, center.y - lineWidth * 5);
+    const majorLabel = `#${p.id} ${fmtLen(p.majorLength, p.unit)}`;
+    const minorLabel = fmtLen(p.minorLength, p.unit);
+    drawExportLine(ctx, p.major.p1, p.major.p2, '#ff6b6b', lineWidth, fontSize, majorLabel);
+    drawExportLine(ctx, p.minor.p1, p.minor.p2, '#6bc5ff', lineWidth, fontSize, minorLabel);
   }
 
   return canvas;
 }
 
-function drawExportLine(ctx, p1, p2, color, lineWidth) {
+function drawExportLine(ctx, p1, p2, color, lineWidth, fontSize, label) {
   ctx.beginPath();
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
@@ -541,5 +631,33 @@ function drawExportLine(ctx, p1, p2, color, lineWidth) {
     ctx.arc(pt.x, pt.y, lineWidth * 2, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
+  }
+
+  // Draw label parallel to line
+  if (label) {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 10) return;
+    let angle = Math.atan2(dy, dx);
+    if (angle > Math.PI / 2) angle -= Math.PI;
+    if (angle < -Math.PI / 2) angle += Math.PI;
+
+    const mx = (p1.x + p2.x) / 2;
+    const my = (p1.y + p2.y) / 2;
+    let nx = -dy / len;
+    let ny = dx / len;
+    if (ny > 0) { nx = -nx; ny = -ny; }
+    const offset = fontSize * 0.8 + lineWidth * 2;
+
+    ctx.save();
+    ctx.translate(mx + nx * offset, my + ny * offset);
+    ctx.rotate(angle);
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
   }
 }
