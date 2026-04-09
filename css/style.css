@@ -129,6 +129,8 @@ body {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  transition: width 0.2s;
+  overflow: hidden;
 }
 
 .sidebar-header {
@@ -139,6 +141,62 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--border);
+}
+
+.sidebar-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.sidebar-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.toggle-icon {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+#sidebar-left.collapsed {
+  width: 28px;
+  min-width: 28px;
+}
+
+#sidebar-left.collapsed .sidebar-body,
+#sidebar-left.collapsed .sidebar-header span:first-child {
+  display: none;
+}
+
+#sidebar-left.collapsed .sidebar-header {
+  justify-content: center;
+  border-bottom: none;
+}
+
+#sidebar-left.collapsed .toggle-icon {
+  transform: rotate(180deg);
+}
+
+#sidebar-right.collapsed {
+  width: 28px;
+  min-width: 28px;
+}
+
+#sidebar-right.collapsed #stats-panel,
+#sidebar-right.collapsed #histogram-container,
+#sidebar-right.collapsed .sidebar-header:not(#toggle-right),
+#sidebar-right.collapsed .sidebar-header span:first-child {
+  display: none;
+}
+
+#sidebar-right.collapsed #toggle-right {
+  justify-content: center;
+  border-bottom: none;
+}
+
+#sidebar-right.collapsed .toggle-icon {
+  transform: rotate(180deg);
 }
 
 #image-list {
@@ -266,6 +324,8 @@ body {
   flex-direction: column;
   flex-shrink: 0;
   overflow-y: auto;
+  transition: width 0.2s;
+  overflow-x: hidden;
 }
 
 #stats-panel {

@@ -40,8 +40,11 @@
   <div id="main">
     <!-- Left sidebar: image list -->
     <div id="sidebar-left">
-      <div class="sidebar-header">图片列表</div>
-      <div id="image-list"></div>
+      <div class="sidebar-header sidebar-toggle" id="toggle-left">
+        <span>图片列表</span>
+        <span class="toggle-icon">◀</span>
+      </div>
+      <div id="image-list" class="sidebar-body"></div>
     </div>
 
     <!-- Center: canvas area -->
@@ -56,7 +59,10 @@
 
     <!-- Right sidebar: stats -->
     <div id="sidebar-right">
-      <div class="sidebar-header">统计信息</div>
+      <div class="sidebar-header sidebar-toggle" id="toggle-right">
+        <span>统计信息</span>
+        <span class="toggle-icon">▶</span>
+      </div>
       <div id="stats-panel">
         <div class="stat-row">
           <span class="stat-label">粒子数量</span>

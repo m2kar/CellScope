@@ -183,6 +183,18 @@ export function initTableToggle() {
   });
 }
 
+export function initSidebarToggle() {
+  document.getElementById('toggle-left').addEventListener('click', () => {
+    document.getElementById('sidebar-left').classList.toggle('collapsed');
+    // Trigger resize so canvas recalculates
+    window.dispatchEvent(new Event('resize'));
+  });
+  document.getElementById('toggle-right').addEventListener('click', () => {
+    document.getElementById('sidebar-right').classList.toggle('collapsed');
+    window.dispatchEvent(new Event('resize'));
+  });
+}
+
 // --- Keyboard shortcuts ---
 
 export function initKeyboardShortcuts() {

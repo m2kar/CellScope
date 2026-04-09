@@ -9,7 +9,7 @@ import { initStatistics, updateStatistics } from './statistics.js';
 import { exportCSV } from './csv-export.js';
 import { exportImage } from './export-image.js';
 import { scheduleSave, loadFromStorage, restoreAnnotations } from './storage.js';
-import { setStatus, updateZoomDisplay, updateImageList, updateAnnotationTable, updateModeButtons, updateUndoRedoButtons, initTableToggle, initKeyboardShortcuts, setZoomCallbacks, initZoomControls } from './ui.js';
+import { setStatus, updateZoomDisplay, updateImageList, updateAnnotationTable, updateModeButtons, updateUndoRedoButtons, initTableToggle, initSidebarToggle, initKeyboardShortcuts, setZoomCallbacks, initZoomControls } from './ui.js';
 
 // --- Init ---
 
@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initCalibration();
   initStatistics();
   initTableToggle();
+  initSidebarToggle();
   initKeyboardShortcuts();
   setZoomCallbacks(zoomBy, resetZoom, setZoomTo);
   initZoomControls();
