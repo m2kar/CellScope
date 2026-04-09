@@ -256,8 +256,13 @@ function buildParticle(img, line1, line2) {
 }
 
 function computeParticle(particle, calibration) {
-  const majorPx = pixelDistance(particle.major.p1, particle.major.p2);
-  const minorPx = pixelDistance(particle.minor.p1, particle.minor.p2);
+  let majorPx = pixelDistance(particle.major.p1, particle.major.p2);
+  let minorPx = pixelDistance(particle.minor.p1, particle.minor.p2);
+  // Auto-swap if minor becomes longer than major
+  if (minorPx > majorPx) {
+    [particle.major, particle.minor] = [particle.minor, particle.major];
+    [majorPx, minorPx] = [minorPx, majorPx];
+  }
   if (calibration) {
     const ppu = calibration.pixelsPerUnit;
     particle.majorLength = majorPx / ppu;
