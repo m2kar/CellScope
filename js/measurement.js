@@ -26,14 +26,47 @@ export function handleMeasurementClick(imagePos) {
       dispatch({ type: 'ADD_LINE', imageIndex: imgIndex, line });
       const unit = line.unit || 'px';
       setStatus(`第1条线: ${line.length.toFixed(1)} ${unit} — 请画第2条线进行配对`);
-    } else {
-      // There is an unpaired line — pair them into a particle
+    } else if (segmentsIntersect(img.pendingLine.p1, img.pendingLine.p2, line.p1, line.p2)) {
+      // Lines intersect — pair them into a particle
       dispatch({ type: 'PAIR_LINES', imageIndex: imgIndex, line });
       const p = img.particles[img.particles.length - 1];
       const unit = p.unit;
       setStatus(`粒子 #${p.id}: 长径=${p.majorLength.toFixed(1)}${unit} 短径=${p.minorLength.toFixed(1)}${unit} — 继续画下一条线`);
+    } else {
+      // Lines don't intersect — replace pending line with new one
+      dispatch({ type: 'REMOVE_LINE', imageIndex: imgIndex });
+      dispatch({ type: 'ADD_LINE', imageIndex: imgIndex, line });
+      const unit = line.unit || 'px';
+      setStatus(`两条线未交叉，无法配对。已替换为新线: ${line.length.toFixed(1)} ${unit} — 请画交叉的第2条线`);
     }
   }
+}
+
+// Check if two line segments (a1-a2) and (b1-b2) intersect
+function segmentsIntersect(a1, a2, b1, b2) {
+  const d1 = cross(b1, b2, a1);
+  const d2 = cross(b1, b2, a2);
+  const d3 = cross(a1, a2, b1);
+  const d4 = cross(a1, a2, b2);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+    return true;
+  }
+  // Check collinear cases
+  if (d1 === 0 && onSegment(b1, b2, a1)) return true;
+  if (d2 === 0 && onSegment(b1, b2, a2)) return true;
+  if (d3 === 0 && onSegment(a1, a2, b1)) return true;
+  if (d4 === 0 && onSegment(a1, a2, b2)) return true;
+  return false;
+}
+
+function cross(p, q, r) {
+  return (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+}
+
+function onSegment(p, q, r) {
+  return Math.min(p.x, q.x) <= r.x && r.x <= Math.max(p.x, q.x) &&
+         Math.min(p.y, q.y) <= r.y && r.y <= Math.max(p.y, q.y);
 }
 
 export function enterMeasureMode() {
