@@ -1,6 +1,6 @@
 // ui.js — DOM updates: sidebar, annotation table, status bar, keyboard shortcuts
 
-import { getState, getActiveImage, setActiveImage, removeImage, setMode, undo, redo, canUndo, canRedo, dispatch, clearPending } from './state.js';
+import { getState, getActiveImage, setActiveImage, removeImage, setMode, setTempMode, restoreMode, undo, redo, canUndo, canRedo, dispatch, clearPending } from './state.js';
 
 // --- Status bar ---
 
@@ -217,7 +217,7 @@ export function initKeyboardShortcuts() {
       e.preventDefault();
       spaceHeld = true;
       prevMode = getState().mode;
-      setMode('navigate');
+      setTempMode('navigate');
     } else if (e.key === 'Escape') {
       const state = getState();
       if (state.pendingPoint) {
@@ -245,7 +245,7 @@ export function initKeyboardShortcuts() {
     if (e.key === ' ' && spaceHeld) {
       spaceHeld = false;
       if (prevMode) {
-        setMode(prevMode);
+        restoreMode(prevMode);
         prevMode = null;
       }
     }

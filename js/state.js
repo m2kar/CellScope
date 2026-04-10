@@ -86,6 +86,17 @@ export function setMode(mode) {
   notify('mode');
 }
 
+// Temporary mode switch (e.g. Space for navigate) — preserves pendingPoint
+export function setTempMode(mode) {
+  state.mode = mode;
+  notify('mode');
+}
+
+export function restoreMode(mode) {
+  state.mode = mode;
+  notify('mode');
+}
+
 // --- Viewport ---
 
 export function setViewport(vp) {
