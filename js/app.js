@@ -2,7 +2,7 @@
 
 import { getState, getActiveImage, addImage, setActiveImage, setMode, setViewport, setFilters, subscribe, undo, redo, clearPending, dispatch } from './state.js';
 import { loadImageFile, createThumbnail } from './image-loader.js';
-import { initCanvas, getOverlayCanvas, screenToImage, fitImageInView, renderImage, renderOverlay, getCanvasSize, setMousePressed, hitTestEndpoint, setHoveredHit, minimapHitTest } from './canvas.js';
+import { initCanvas, getOverlayCanvas, screenToImage, fitImageInView, renderImage, renderOverlay, getCanvasSize, setMousePressed, hitTestEndpoint, setHoveredHit, hitTestLine, setHoveredLine, getHoveredLine, minimapHitTest } from './canvas.js';
 import { initCalibration, handleCalibrationClick, enterCalibrationMode } from './calibration.js';
 import { handleMeasurementClick, enterMeasureMode } from './measurement.js';
 import { initStatistics, updateStatistics } from './statistics.js';
@@ -274,9 +274,15 @@ function onMouseMove(e) {
       setHoveredHit(hit);
       if (hit) {
         getOverlayCanvas().style.cursor = 'grab';
+        setHoveredLine(null);
       } else {
-        getOverlayCanvas().style.cursor = '';
+        // Check line hover (for deletion)
+        const lineHit = hitTestLine(pos);
+        setHoveredLine(lineHit);
+        getOverlayCanvas().style.cursor = lineHit ? 'pointer' : '';
       }
+    } else {
+      setHoveredLine(null);
     }
 
     // Edge-pan when drawing and mouse near canvas border
@@ -324,6 +330,7 @@ function onMouseUp(e) {
         source: dragHit.source,
         particleId: dragHit.particleId || null,
         lineKey: dragHit.lineKey,
+        lineIndex: dragHit.lineIndex,
         pointKey: dragHit.pointKey,
         from: dragOriginalPos,
         to: finalPos,
@@ -367,6 +374,7 @@ function onMouseLeave() {
     getOverlayCanvas().classList.remove('dragging');
   }
   setHoveredHit(null);
+  setHoveredLine(null);
   renderOverlay(null, null);
 }
 

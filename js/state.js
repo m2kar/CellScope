@@ -44,7 +44,7 @@ export function addImage(imageData) {
     thumbnail: imageData.thumbnail,
     calibration: null,
     particles: [],
-    pendingLine: null,   // unpaired line {p1, p2} waiting for its pair
+    pendingLines: [],    // unpaired lines [{p1, p2, length, unit}, ...] waiting for pair
     nextParticleId: 1,
   };
   state.images.push(img);
@@ -157,36 +157,44 @@ function executeAction(action) {
   if (!img) return null;
 
   switch (action.type) {
-    // Add a single unpaired line to the image
+    // Add a single unpaired line to the pending array
     case 'ADD_LINE': {
-      img.pendingLine = action.line;
-      computeLine(img.pendingLine, img.calibration);
-      return { type: 'REMOVE_LINE', imageIndex: action.imageIndex, line: action.line };
+      const line = action.line;
+      computeLine(line, img.calibration);
+      if (action.atIndex !== undefined) {
+        img.pendingLines.splice(action.atIndex, 0, line);
+      } else {
+        img.pendingLines.push(line);
+      }
+      const addedIndex = action.atIndex !== undefined ? action.atIndex : img.pendingLines.length - 1;
+      return { type: 'REMOVE_LINE', imageIndex: action.imageIndex, lineIndex: addedIndex };
     }
-    // Remove the unpaired line
+    // Remove a line from the pending array by index
     case 'REMOVE_LINE': {
-      const prev = img.pendingLine;
-      img.pendingLine = null;
-      return { type: 'ADD_LINE', imageIndex: action.imageIndex, line: prev };
+      const idx = action.lineIndex !== undefined ? action.lineIndex : img.pendingLines.length - 1;
+      if (idx < 0 || idx >= img.pendingLines.length) return null;
+      const removed = img.pendingLines.splice(idx, 1)[0];
+      return { type: 'ADD_LINE', imageIndex: action.imageIndex, line: removed, atIndex: idx };
     }
-    // Pair the existing pending line with a new line → create particle
+    // Pair a pending line (by index) with a new line → create particle
     case 'PAIR_LINES': {
-      const firstLine = img.pendingLine;
-      img.pendingLine = null;
+      const pIdx = action.pairedLineIndex;
+      if (pIdx < 0 || pIdx >= img.pendingLines.length) return null;
+      const firstLine = img.pendingLines.splice(pIdx, 1)[0];
       const particle = buildParticle(img, firstLine, action.line);
       img.particles.push(particle);
-      return { type: 'UNPAIR_PARTICLE', imageIndex: action.imageIndex, particleId: particle.id, restoredLine: firstLine };
+      return { type: 'UNPAIR_PARTICLE', imageIndex: action.imageIndex, particleId: particle.id, restoredLine: firstLine, restoredIndex: pIdx };
     }
-    // Undo of PAIR_LINES: remove particle, restore pending line
+    // Undo of PAIR_LINES: remove particle, restore pending line to array
     case 'UNPAIR_PARTICLE': {
       const idx = img.particles.findIndex(p => p.id === action.particleId);
       if (idx < 0) return null;
       const removed = img.particles.splice(idx, 1)[0];
-      img.pendingLine = action.restoredLine;
-      computeLine(img.pendingLine, img.calibration);
-      // The second line that was paired
-      const secondLine = getSecondLine(removed, action.restoredLine);
-      return { type: 'PAIR_LINES', imageIndex: action.imageIndex, line: secondLine };
+      const restoredLine = action.restoredLine;
+      computeLine(restoredLine, img.calibration);
+      img.pendingLines.splice(action.restoredIndex, 0, restoredLine);
+      const secondLine = getSecondLine(removed, restoredLine);
+      return { type: 'PAIR_LINES', imageIndex: action.imageIndex, line: secondLine, pairedLineIndex: action.restoredIndex };
     }
     case 'ADD_PARTICLE': {
       img.particles.push(action.particle);
@@ -211,8 +219,8 @@ function executeAction(action) {
       }
       recalcAll(img);
       return { type: 'MOVE_ENDPOINT', imageIndex: action.imageIndex, source: action.source,
-               particleId: action.particleId, lineKey: action.lineKey, pointKey: action.pointKey,
-               from: action.to, to: action.from };
+               particleId: action.particleId, lineKey: action.lineKey, lineIndex: action.lineIndex,
+               pointKey: action.pointKey, from: action.to, to: action.from };
     }
     case 'SET_CALIBRATION': {
       const prev = img.calibration;
@@ -234,7 +242,7 @@ function resolveEndpoint(img, action) {
       return p[action.lineKey]; // 'major' or 'minor'
     }
     case 'pendingLine':
-      return img.pendingLine;
+      return img.pendingLines[action.lineIndex];
     case 'calibration':
       return img.calibration;
     default:
@@ -313,7 +321,9 @@ function computeParticle(particle, calibration) {
 }
 
 function recalcAll(img) {
-  computeLine(img.pendingLine, img.calibration);
+  for (const line of img.pendingLines) {
+    computeLine(line, img.calibration);
+  }
   for (const p of img.particles) {
     computeParticle(p, img.calibration);
   }

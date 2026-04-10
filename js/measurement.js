@@ -21,23 +21,28 @@ export function handleMeasurementClick(imagePos) {
     if (!img) return;
     const imgIndex = state.images.indexOf(img);
 
-    if (!img.pendingLine) {
-      // No unpaired line — this becomes the first unpaired line
-      dispatch({ type: 'ADD_LINE', imageIndex: imgIndex, line });
-      const unit = line.unit || 'px';
-      setStatus(`第1条线: ${line.length.toFixed(1)} ${unit} — 请画第2条线进行配对`);
-    } else if (segmentsIntersect(img.pendingLine.p1, img.pendingLine.p2, line.p1, line.p2)) {
-      // Lines intersect — pair them into a particle
-      dispatch({ type: 'PAIR_LINES', imageIndex: imgIndex, line });
+    // Try to find an existing pending line that intersects with the new line
+    let pairedIndex = -1;
+    for (let i = 0; i < img.pendingLines.length; i++) {
+      const pending = img.pendingLines[i];
+      if (segmentsIntersect(pending.p1, pending.p2, line.p1, line.p2)) {
+        pairedIndex = i;
+        break;
+      }
+    }
+
+    if (pairedIndex >= 0) {
+      // Found an intersecting line — pair them into a particle
+      dispatch({ type: 'PAIR_LINES', imageIndex: imgIndex, line, pairedLineIndex: pairedIndex });
       const p = img.particles[img.particles.length - 1];
       const unit = p.unit;
       setStatus(`粒子 #${p.id}: 长径=${p.majorLength.toFixed(1)}${unit} 短径=${p.minorLength.toFixed(1)}${unit} — 继续画下一条线`);
     } else {
-      // Lines don't intersect — replace pending line with new one
-      dispatch({ type: 'REMOVE_LINE', imageIndex: imgIndex });
+      // No intersecting line found — add to pending queue
       dispatch({ type: 'ADD_LINE', imageIndex: imgIndex, line });
       const unit = line.unit || 'px';
-      setStatus(`两条线未交叉，无法配对。已替换为新线: ${line.length.toFixed(1)} ${unit} — 请画交叉的第2条线`);
+      const count = img.pendingLines.length;
+      setStatus(`待配对线 ${count} 条: ${line.length.toFixed(1)} ${unit} — 请画交叉的线进行配对`);
     }
   }
 }

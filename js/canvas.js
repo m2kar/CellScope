@@ -79,10 +79,11 @@ export function hitTestEndpoint(imagePos) {
     if (near(p.minor.p1)) return { source: 'particle', particleId: p.id, lineKey: 'minor', pointKey: 'p1', point: p.minor.p1 };
     if (near(p.minor.p2)) return { source: 'particle', particleId: p.id, lineKey: 'minor', pointKey: 'p2', point: p.minor.p2 };
   }
-  // Check pending line
-  if (img.pendingLine) {
-    if (near(img.pendingLine.p1)) return { source: 'pendingLine', lineKey: null, pointKey: 'p1', point: img.pendingLine.p1 };
-    if (near(img.pendingLine.p2)) return { source: 'pendingLine', lineKey: null, pointKey: 'p2', point: img.pendingLine.p2 };
+  // Check pending lines
+  for (let i = 0; i < img.pendingLines.length; i++) {
+    const line = img.pendingLines[i];
+    if (near(line.p1)) return { source: 'pendingLine', lineIndex: i, pointKey: 'p1', point: line.p1 };
+    if (near(line.p2)) return { source: 'pendingLine', lineIndex: i, pointKey: 'p2', point: line.p2 };
   }
   // Check calibration
   if (img.calibration) {
@@ -95,6 +96,55 @@ export function hitTestEndpoint(imagePos) {
 // Track which endpoint is hovered for rendering highlight
 let hoveredHit = null;
 export function setHoveredHit(hit) { hoveredHit = hit; }
+
+// Track which line is hovered for deletion highlight
+let hoveredLine = null;
+export function setHoveredLine(hit) { hoveredLine = hit; }
+export function getHoveredLine() { return hoveredLine; }
+
+// Hit-test: is mouse near a line segment (not just endpoint)?
+// Returns { source, particleId?, lineIndex?, lineKey? } or null
+export function hitTestLine(imagePos) {
+  const img = getActiveImage();
+  if (!img || !imagePos) return null;
+  const { zoom } = getState().viewport;
+  const hitRadius = HIT_RADIUS_SCREEN_PX / zoom;
+
+  // Check particles (both major and minor hit the same particle)
+  for (const p of img.particles) {
+    if (pointToSegmentDist(imagePos, p.major.p1, p.major.p2) <= hitRadius ||
+        pointToSegmentDist(imagePos, p.minor.p1, p.minor.p2) <= hitRadius) {
+      return { source: 'particle', particleId: p.id };
+    }
+  }
+  // Check pending lines
+  for (let i = 0; i < img.pendingLines.length; i++) {
+    const line = img.pendingLines[i];
+    if (pointToSegmentDist(imagePos, line.p1, line.p2) <= hitRadius) {
+      return { source: 'pendingLine', lineIndex: i };
+    }
+  }
+  // Check calibration
+  if (img.calibration) {
+    if (pointToSegmentDist(imagePos, img.calibration.p1, img.calibration.p2) <= hitRadius) {
+      return { source: 'calibration' };
+    }
+  }
+  return null;
+}
+
+// Distance from point to line segment
+function pointToSegmentDist(pt, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.sqrt((pt.x - a.x) ** 2 + (pt.y - a.y) ** 2);
+  let t = ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const projX = a.x + t * dx;
+  const projY = a.y + t * dy;
+  return Math.sqrt((pt.x - projX) ** 2 + (pt.y - projY) ** 2);
+}
 
 // --- Coordinate transforms ---
 
@@ -183,22 +233,26 @@ export function renderOverlay(currentMousePos, currentScreenPos) {
 
   // Draw calibration line (solid)
   if (img.calibration) {
+    const calHL = hoveredLine && hoveredLine.source === 'calibration';
     const calLabel = `${img.calibration.length} ${img.calibration.unit}`;
-    drawLine(img.calibration.p1, img.calibration.p2, '#6bffb8', lineWidth, overlayCtx, calLabel, { solid: true });
+    drawLine(img.calibration.p1, img.calibration.p2, '#6bffb8', lineWidth, overlayCtx, calLabel, { solid: true, highlighted: calHL });
   }
 
   // Draw completed particles
   for (const p of img.particles) {
+    const pHL = hoveredLine && hoveredLine.source === 'particle' && hoveredLine.particleId === p.id;
     const majorLabel = `#${p.id} ${fmtLen(p.majorLength, p.unit)}`;
     const minorLabel = fmtLen(p.minorLength, p.unit);
-    drawLine(p.major.p1, p.major.p2, '#ff6b6b', lineWidth, overlayCtx, majorLabel);
-    drawLine(p.minor.p1, p.minor.p2, '#6bc5ff', lineWidth, overlayCtx, minorLabel);
+    drawLine(p.major.p1, p.major.p2, '#ff6b6b', lineWidth, overlayCtx, majorLabel, { highlighted: pHL });
+    drawLine(p.minor.p1, p.minor.p2, '#6bc5ff', lineWidth, overlayCtx, minorLabel, { highlighted: pHL });
   }
 
-  // Draw unpaired pending line (waiting for its pair)
-  if (img.pendingLine) {
-    const pendingLabel = fmtLen(img.pendingLine.length, img.pendingLine.unit);
-    drawLine(img.pendingLine.p1, img.pendingLine.p2, '#ffb86b', lineWidth, overlayCtx, pendingLabel);
+  // Draw unpaired pending lines (waiting for their pair)
+  for (let i = 0; i < img.pendingLines.length; i++) {
+    const pLine = img.pendingLines[i];
+    const lHL = hoveredLine && hoveredLine.source === 'pendingLine' && hoveredLine.lineIndex === i;
+    const pendingLabel = fmtLen(pLine.length, pLine.unit);
+    drawLine(pLine.p1, pLine.p2, '#ffb86b', lineWidth, overlayCtx, pendingLabel, { highlighted: lHL });
   }
 
   // Effective mouse position for rubber-band (calibration locks Y)
@@ -233,7 +287,7 @@ function getEffectiveMousePos(state) {
 function getPendingColor(state) {
   if (state.mode === 'calibrate') return '#6bffb8';
   const img = getActiveImage();
-  return (img && img.pendingLine) ? '#6bc5ff' : '#ff6b6b';
+  return (img && img.pendingLines.length > 0) ? '#6bc5ff' : '#ff6b6b';
 }
 
 function imageToCanvasNoDpr(ix, iy) {
@@ -382,11 +436,25 @@ function resetLabelBoxes() {
 
 function drawLine(p1, p2, color, lineWidth, ctx, label, opts) {
   const solid = opts && opts.solid;
+  const highlighted = opts && opts.highlighted;
   const a = imageToCanvasNoDpr(p1.x, p1.y);
   const b = imageToCanvasNoDpr(p2.x, p2.y);
+
+  // Draw highlight glow behind the line if hovered for deletion
+  if (highlighted) {
+    ctx.beginPath();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = lineWidth + 4;
+    ctx.globalAlpha = 0.4;
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   ctx.beginPath();
   ctx.strokeStyle = color;
-  ctx.lineWidth = lineWidth;
+  ctx.lineWidth = highlighted ? lineWidth + 1 : lineWidth;
   if (!solid) ctx.setLineDash([5, 3]);
   ctx.moveTo(a.x, a.y);
   ctx.lineTo(b.x, b.y);

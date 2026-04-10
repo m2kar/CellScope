@@ -1,6 +1,7 @@
 // ui.js — DOM updates: sidebar, annotation table, status bar, keyboard shortcuts
 
 import { getState, getActiveImage, setActiveImage, removeImage, setMode, setTempMode, restoreMode, undo, redo, canUndo, canRedo, dispatch, clearPending } from './state.js';
+import { getHoveredLine, setHoveredLine } from './canvas.js';
 
 // --- Status bar ---
 
@@ -109,9 +110,9 @@ export function updateAnnotationTable() {
   for (let imgIdx = 0; imgIdx < state.images.length; imgIdx++) {
     const img = state.images[imgIdx];
 
-    // Show unpaired pending line first (highlighted)
-    if (img.pendingLine) {
-      const line = img.pendingLine;
+    // Show unpaired pending lines first (highlighted)
+    for (let li = 0; li < img.pendingLines.length; li++) {
+      const line = img.pendingLines[li];
       const tr = document.createElement('tr');
       tr.className = 'row-pending';
       tr.innerHTML = `
@@ -121,7 +122,7 @@ export function updateAnnotationTable() {
         <td>-</td>
         <td>-</td>
         <td>-</td>
-        <td><button class="btn-delete" data-img="${imgIdx}" data-action="remove-line">删除</button></td>
+        <td><button class="btn-delete" data-img="${imgIdx}" data-action="remove-line" data-line-index="${li}">删除</button></td>
       `;
       tbody.appendChild(tr);
     }
@@ -147,7 +148,8 @@ export function updateAnnotationTable() {
     btn.addEventListener('click', () => {
       const imgIdx = parseInt(btn.dataset.img);
       if (btn.dataset.action === 'remove-line') {
-        dispatch({ type: 'REMOVE_LINE', imageIndex: imgIdx, line: null });
+        const lineIndex = parseInt(btn.dataset.lineIndex);
+        dispatch({ type: 'REMOVE_LINE', imageIndex: imgIdx, lineIndex });
       } else {
         const particleId = parseInt(btn.dataset.id);
         dispatch({ type: 'REMOVE_PARTICLE', imageIndex: imgIdx, particleId });
@@ -232,6 +234,21 @@ export function initKeyboardShortcuts() {
       setMode('measure');
     } else if (e.key === 'v' || e.key === 'V') {
       setMode('navigate');
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      const lineHit = getHoveredLine();
+      if (lineHit) {
+        e.preventDefault();
+        const imgIdx = getState().activeImageIndex;
+        if (lineHit.source === 'particle') {
+          dispatch({ type: 'REMOVE_PARTICLE', imageIndex: imgIdx, particleId: lineHit.particleId });
+        } else if (lineHit.source === 'pendingLine') {
+          dispatch({ type: 'REMOVE_LINE', imageIndex: imgIdx, lineIndex: lineHit.lineIndex });
+        } else if (lineHit.source === 'calibration') {
+          dispatch({ type: 'SET_CALIBRATION', imageIndex: imgIdx, calibration: null });
+        }
+        setHoveredLine(null);
+        setStatus('已删除');
+      }
     } else if (e.key === '+' || e.key === '=') {
       zoomBy(1.2);
     } else if (e.key === '-') {
