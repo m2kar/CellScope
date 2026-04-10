@@ -165,6 +165,12 @@ let dragOriginalPos = null; // { x, y } original position for undo
 // Minimap drag state
 let isDraggingMinimap = false;
 
+// Edge-pan state
+const EDGE_PAN_MARGIN = 40;  // px from canvas edge to trigger panning
+const EDGE_PAN_SPEED = 8;    // px per frame
+let edgePanRAF = null;
+let lastMouseEvent = null;
+
 function bindCanvasEvents() {
   const overlay = getOverlayCanvas();
 
@@ -273,17 +279,29 @@ function onMouseMove(e) {
       }
     }
 
-    if (state.mode === 'calibrate' || state.mode === 'measure') {
-      renderOverlay(pos, getScreenRelativePos(e));
+    // Edge-pan when drawing and mouse near canvas border
+    if (state.pendingPoint && (state.mode === 'calibrate' || state.mode === 'measure')) {
+      lastMouseEvent = e;
+      const rect = getOverlayCanvas().parentElement.getBoundingClientRect();
+      const relX = e.clientX - rect.left;
+      const relY = e.clientY - rect.top;
+      if (relX < EDGE_PAN_MARGIN || relX > rect.width - EDGE_PAN_MARGIN ||
+          relY < EDGE_PAN_MARGIN || relY > rect.height - EDGE_PAN_MARGIN) {
+        startEdgePan();
+      } else {
+        stopEdgePan();
+      }
     } else {
-      // Still re-render to update hover highlight in navigate mode
-      renderOverlay(pos, getScreenRelativePos(e));
+      stopEdgePan();
     }
+
+    renderOverlay(pos, getScreenRelativePos(e));
   }
 }
 
 function onMouseUp(e) {
   setMousePressed(false);
+  stopEdgePan();
 
   // Finish minimap drag
   if (isDraggingMinimap) {
@@ -333,6 +351,7 @@ function onMouseUp(e) {
 
 function onMouseLeave() {
   setMousePressed(false);
+  stopEdgePan();
   isDraggingMinimap = false;
   if (isDraggingEndpoint && dragHit) {
     // Revert to original position on leave
@@ -349,6 +368,49 @@ function onMouseLeave() {
   }
   setHoveredHit(null);
   renderOverlay(null, null);
+}
+
+// --- Edge-panning when drawing near canvas border ---
+
+function startEdgePan() {
+  if (edgePanRAF) return;
+  edgePanRAF = requestAnimationFrame(edgePanTick);
+}
+
+function stopEdgePan() {
+  if (edgePanRAF) {
+    cancelAnimationFrame(edgePanRAF);
+    edgePanRAF = null;
+  }
+}
+
+function edgePanTick() {
+  edgePanRAF = null;
+  const state = getState();
+  if (!state.pendingPoint || !lastMouseEvent) return;
+  if (state.mode !== 'calibrate' && state.mode !== 'measure') return;
+
+  const rect = getOverlayCanvas().parentElement.getBoundingClientRect();
+  const mx = lastMouseEvent.clientX - rect.left;
+  const my = lastMouseEvent.clientY - rect.top;
+
+  let dx = 0, dy = 0;
+  if (mx < EDGE_PAN_MARGIN) dx = EDGE_PAN_SPEED * (1 - mx / EDGE_PAN_MARGIN);
+  else if (mx > rect.width - EDGE_PAN_MARGIN) dx = -EDGE_PAN_SPEED * (1 - (rect.width - mx) / EDGE_PAN_MARGIN);
+  if (my < EDGE_PAN_MARGIN) dy = EDGE_PAN_SPEED * (1 - my / EDGE_PAN_MARGIN);
+  else if (my > rect.height - EDGE_PAN_MARGIN) dy = -EDGE_PAN_SPEED * (1 - (rect.height - my) / EDGE_PAN_MARGIN);
+
+  if (dx !== 0 || dy !== 0) {
+    setViewport({
+      panX: state.viewport.panX + dx,
+      panY: state.viewport.panY + dy,
+    });
+    // Update overlay with current mouse position
+    const pos = screenToImage(lastMouseEvent.clientX, lastMouseEvent.clientY);
+    const screenRelPos = getScreenRelativePos(lastMouseEvent);
+    renderOverlay(pos, screenRelPos);
+    edgePanRAF = requestAnimationFrame(edgePanTick);
+  }
 }
 
 function onWheel(e) {
